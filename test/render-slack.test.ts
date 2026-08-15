@@ -54,6 +54,23 @@ test('message has a header and a plain-text fallback for notifications', () => {
   assert.equal((msg.blocks[0] as any).type, 'header')
 })
 
+test('featured standings are listed above worldwide', () => {
+  const body = json([delta({ featured: [country('us', 9, { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 })] })])
+  assert.ok(body.indexOf('`US`') < body.indexOf('*Worldwide*'))
+})
+
+test('the notification preview leads with the featured storefront', () => {
+  // The preview is a single line, so it should carry the number being watched
+  // rather than the worldwide aggregate.
+  const withFeatured = buildSlackMessage([
+    delta({ featured: [country('us', 9, { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 })] }),
+  ])
+  assert.match(withFeatured.text, /Facebook: US /)
+
+  // With nothing featured it falls back to worldwide.
+  assert.doesNotMatch(buildSlackMessage([delta()]).text, /US /)
+})
+
 test('the net-change caveat is present whenever a delta is shown', () => {
   // Dropping this line would let the message imply these are gross new ratings.
   assert.match(json([delta()]), /Net change since the previous snapshot/)

@@ -1,20 +1,23 @@
 # dipstick
 
-Daily App Store rating deltas — worldwide, per-country, per-star, straight to Slack.
+Daily App Store rating deltas — worldwide, per-country, per-star — posted to a GitHub
+issue or Slack.
 
 ```
-Facebook (284882215)  2026-08-15
-  compared with 2026-08-14
+Clock In (534278133)  2026-08-16
+  compared with 2026-08-15
 
-  Worldwide   4.50734 ▲ +0.00012   98,388,963 ratings  (+641)
+  US          4.62208 ▼ -0.00071   6,496 ratings  (+9)
+  Worldwide   4.59723 ▼ -0.00051   7,786 ratings  (+10)
 
-  Net change by star
-    5★ +610   4★ 0   3★ +3   2★ 0   1★ +28
+  Net change by star, US
+    5★ +7   4★ 0   3★ 0   2★ 0   1★ +2
 
-  Countries that moved (3)
-    us              +440   5★+412 1★+28
-    br              +198   5★+198
-    jp                +3   3★+3
+  Net change by star, worldwide
+    5★ +8   4★ 0   3★ 0   2★ 0   1★ +2
+
+  Countries that moved (1)
+    gb                +1   5★+1
 ```
 
 ## Why
@@ -52,8 +55,10 @@ apps:
   - id: "284882215"
     name: Facebook
 
-slack:
-  webhookUrl: env:SLACK_WEBHOOK_URL
+github:
+  issue: auto
+
+featured: [us]
 ```
 
 `id` is the numeric App Store ID from the store URL (`apps.apple.com/app/id284882215`).
@@ -73,9 +78,9 @@ own column in the per-star table — which is what makes "every new 1★ today c
 US" visible without arithmetic:
 
 ```
-| Rating | Worldwide | US |
-| ★★★★★  | +8        | +7 |
-| ★      | +2        | +2 |
+| Rating | US | Worldwide |
+| ★★★★★  | +7 | +8        |
+| ★      | +2 | +2        |
 ```
 
 It is excluded from "countries that moved" so it never appears twice, and it is fetched
@@ -93,25 +98,42 @@ countries: [us, gb, de, jp]
 
 | Command | What it does |
 |---|---|
-| `dipstick check` | Fetch and show today's change. No writes, no Slack. |
-| `dipstick run` | Fetch, record the snapshot, post to Slack. |
-| `dipstick run --dry-run` | Everything except writing and posting; prints the Slack payload. |
+| `dipstick check` | Fetch and show today's change. Writes nothing, posts nothing. |
+| `dipstick run` | Fetch, record the snapshot, post the report. |
+| `dipstick run --dry-run` | Everything except writing and posting; prints the payloads. |
 | `dipstick history` | Show what has been recorded so far. |
 | `dipstick init` | Scaffold the config and the GitHub Actions workflow. |
 
 ## Running it daily
 
-`init` writes `.github/workflows/dipstick.yml`, which runs at 14:00 UTC, posts to Slack,
-and commits the day's snapshot back to the repo.
+`init` writes `.github/workflows/dipstick.yml`, which runs at 14:00 UTC, posts the report,
+and commits the day's snapshot back to the repo. It commits straight to the default branch
+— there is no PR to merge and nothing to approve. A push that races with another commit is
+rebased and retried rather than losing the day.
 
-Add your webhook under **Settings → Secrets and variables → Actions** as
-`SLACK_WEBHOOK_URL`. Create the webhook itself at
-[api.slack.com/messaging/webhooks](https://api.slack.com/messaging/webhooks) — it is a
-single URL, no OAuth app and no tokens to rotate.
+### Where the report goes
+
+**GitHub issue (default).** Requires no setup: Actions already provides the repo and token,
+so there is no account to create, no webhook to mint, and no secret to store. `issue: auto`
+finds the issue dipstick owns — it labels it `dipstick` — or opens one. GitHub's own
+notifications then deliver each comment to email and the mobile app. The workflow needs:
+
+```yaml
+permissions:
+  contents: write
+  issues: write
+```
+
+**Slack.** Add a `slack.webhookUrl` and store the URL as a repository secret. Create the
+webhook at [api.slack.com/messaging/webhooks](https://api.slack.com/messaging/webhooks) —
+a single URL, no OAuth app and no tokens to rotate. Both destinations can run together.
 
 One thing worth knowing: GitHub disables scheduled workflows after 60 days of repository
 inactivity. Because dipstick commits a snapshot every day, the repo never goes idle and
 the schedule sustains itself. This is a common way cron workflows die silently elsewhere.
+
+A manual re-run posts a second comment for the same day. History is keyed by date and
+rewrites in place, so the data stays correct either way.
 
 ## Reading the numbers
 

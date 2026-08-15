@@ -91,11 +91,12 @@ export function renderDelta(delta: Delta, { maxCountries = 15 } = {}): string {
     )
     out.push(dim('  Run again tomorrow to see the first daily change.'))
     out.push('')
+    // Featured storefronts lead; worldwide is the context beneath them.
+    for (const c of delta.featured) out.push(featuredLine(c, false))
     out.push(
       `  ${bold('Worldwide')}   ${bold(w.avgAfter.toFixed(5))}   ` +
         `${num(w.totalAfter)} ratings across ${delta.countryCount} storefronts`,
     )
-    for (const c of delta.featured) out.push(featuredLine(c, false))
     // A baseline recorded from a partial fetch poisons every future delta, so
     // failures matter more on the first run than on any later one.
     out.push(...failureLines(delta))
@@ -112,25 +113,27 @@ export function renderDelta(delta: Delta, { maxCountries = 15 } = {}): string {
   // movement that isn't there.
   const avgChange = Number(w.avgChange.toFixed(5))
   const avgText = `${avgChange > 0 ? '+' : avgChange < 0 ? '' : '±'}${avgChange.toFixed(5)}`
+
+  // Featured storefronts lead; worldwide is the context beneath them.
+  for (const c of delta.featured) out.push(featuredLine(c, true))
   out.push(
     `  ${bold('Worldwide')}   ${bold(w.avgAfter.toFixed(5))} ${arrow(avgChange)} ${
       avgChange === 0 ? dim(avgText) : avgChange > 0 ? green(avgText) : red(avgText)
     }   ${num(w.totalAfter)} ratings  (${signed(w.net)})`,
   )
-  for (const c of delta.featured) out.push(featuredLine(c, true))
 
-  out.push('')
-  out.push(`  ${dim('Net change by star, worldwide')}`)
-  out.push(`    ${starLine(w.stars)}`)
-
-  // Per-star detail for featured storefronts, since "+9 ratings" is much less
-  // useful than knowing whether they were five stars or one.
+  // Per-star detail, same order: "+9 ratings" is much less useful than knowing
+  // whether they were five stars or one.
   for (const c of delta.featured) {
     if (c.isEmpty || !hasStarMovement(c.stars)) continue
     out.push('')
     out.push(`  ${dim(`Net change by star, ${c.country.toUpperCase()}`)}`)
     out.push(`    ${starLine(c.stars)}`)
   }
+
+  out.push('')
+  out.push(`  ${dim('Net change by star, worldwide')}`)
+  out.push(`    ${starLine(w.stars)}`)
 
   if (delta.changedCountries.length > 0) {
     out.push('')

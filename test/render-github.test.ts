@@ -62,15 +62,34 @@ test('per-star net changes render as a table', () => {
   assert.match(md, /\| ★ \| \+2 \|/)
 })
 
-test('a featured storefront gets its own column beside worldwide', () => {
+test('a featured storefront gets its own column, ahead of worldwide', () => {
   // Side by side is what makes "the US drove all of today's 1★" visible
-  // without doing arithmetic across two separate tables.
+  // without doing arithmetic across two separate tables. Featured leads,
+  // because that is the column being watched.
   const md = buildIssueComment([
     delta({ featured: [country('us', 9, { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 })] }),
   ])
-  assert.match(md, /\| Rating \| Worldwide \| US \|/)
-  assert.match(md, /\| ★★★★★ \| \+8 \| \+7 \|/)
+  assert.match(md, /\| Rating \| US \| Worldwide \|/)
+  assert.match(md, /\| ★★★★★ \| \+7 \| \+8 \|/)
   assert.match(md, /\| ★ \| \+2 \| \+2 \|/)
+})
+
+test('featured standings are listed above worldwide', () => {
+  const md = buildIssueComment([
+    delta({ featured: [country('us', 9, { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 })] }),
+  ])
+  assert.ok(
+    md.indexOf('**US**') < md.indexOf('**Worldwide**'),
+    'the featured storefront should appear before worldwide',
+  )
+})
+
+test('featured leads on a first run too', () => {
+  const md = buildIssueComment([
+    delta({ isFirstRun: true, featured: [country('us', 9, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 })] }),
+  ])
+  assert.ok(md.indexOf('**US**') < md.indexOf('**Worldwide**'))
+  assert.match(md, /across 32 storefronts/)
 })
 
 test('a featured storefront is shown even when it did not move', () => {

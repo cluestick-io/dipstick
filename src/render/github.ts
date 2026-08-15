@@ -26,9 +26,10 @@ function trend(change: number): string {
  */
 function starTable(worldwide: StarDeltas, featured: CountryDelta[]): string {
   const shown = featured.filter((c) => !c.isEmpty)
-  const header = ['Rating', 'Worldwide', ...shown.map((c) => c.country.toUpperCase())]
+  // Featured columns lead, worldwide last -- same order as the lines above.
+  const header = ['Rating', ...shown.map((c) => c.country.toUpperCase()), 'Worldwide']
   const rows = ([5, 4, 3, 2, 1] as const).map((s) =>
-    ['★'.repeat(s), signed(worldwide[s]), ...shown.map((c) => signed(c.stars[s]))],
+    ['★'.repeat(s), ...shown.map((c) => signed(c.stars[s])), signed(worldwide[s])],
   )
 
   return [
@@ -38,19 +39,40 @@ function starTable(worldwide: StarDeltas, featured: CountryDelta[]): string {
   ].join('\n')
 }
 
-/** A featured storefront's standing line, shown whether or not it moved. */
-function featuredLine(c: CountryDelta, showChange: boolean): string {
-  const label = `\`${c.country.toUpperCase()}\``
+/**
+ * One standing line. Featured storefronts and worldwide share this format so
+ * they read as peers in a single list rather than as two different things.
+ */
+function standingLine(
+  label: string,
+  avgAfter: number,
+  avgBefore: number,
+  net: number,
+  total: number,
+  showChange: boolean,
+  suffix = '',
+): string {
+  if (!showChange) return `- **${label}** ${avgAfter.toFixed(5)} · ${num(total)} ratings${suffix}`
 
-  if (c.isEmpty) return `- ${label} — _no ratings in this storefront_`
-  if (!showChange) return `- ${label} **${c.avgAfter.toFixed(5)}** · ${num(c.totalAfter)} ratings`
-
-  const change = Number((c.avgAfter - c.avgBefore).toFixed(5))
+  const change = Number((avgAfter - avgBefore).toFixed(5))
   const text = `${change > 0 ? '+' : change < 0 ? '' : '±'}${change.toFixed(5)}`
 
   return (
-    `- ${label} **${c.avgAfter.toFixed(5)}** ${trend(change)} \`${text}\` · ` +
-    `**${signed(c.net)}** ratings · ${num(c.totalAfter)} total`
+    `- **${label}** ${avgAfter.toFixed(5)} ${trend(change)} \`${text}\` · ` +
+    `**${signed(net)}** ratings · ${num(total)} total`
+  )
+}
+
+/** A featured storefront's standing line, shown whether or not it moved. */
+function featuredLine(c: CountryDelta, showChange: boolean): string {
+  if (c.isEmpty) return `- **${c.country.toUpperCase()}** — _no ratings in this storefront_`
+  return standingLine(
+    c.country.toUpperCase(),
+    c.avgAfter,
+    c.avgBefore,
+    c.net,
+    c.totalAfter,
+    showChange,
   )
 }
 
@@ -62,14 +84,20 @@ function appSection(delta: Delta): string {
 
   if (delta.isFirstRun) {
     out.push('')
+    out.push('Baseline recorded.')
+    out.push('')
+    out.push(...delta.featured.map((c) => featuredLine(c, false)))
     out.push(
-      `Baseline recorded: **${w.avgAfter.toFixed(5)}** from ${num(w.totalAfter)} ratings ` +
-        `across ${delta.countryCount} storefronts.`,
+      standingLine(
+        'Worldwide',
+        w.avgAfter,
+        w.avgBefore,
+        w.net,
+        w.totalAfter,
+        false,
+        ` across ${delta.countryCount} storefronts`,
+      ),
     )
-    if (delta.featured.length > 0) {
-      out.push('')
-      out.push(...delta.featured.map((c) => featuredLine(c, false)))
-    }
     out.push('')
     out.push('_First run — daily changes start tomorrow._')
     if (delta.failures.length > 0) out.push('', failureNote(delta))
@@ -81,14 +109,12 @@ function appSection(delta: Delta): string {
   const avgText = `${avgChange > 0 ? '+' : avgChange < 0 ? '' : '±'}${avgChange.toFixed(5)}`
 
   out.push('')
+  // Featured storefronts lead; worldwide closes the list as context.
+  out.push(...delta.featured.map((c) => featuredLine(c, true)))
   out.push(
-    `**Worldwide** — **${w.avgAfter.toFixed(5)}** ${trend(avgChange)} \`${avgText}\` · ` +
+    `- **Worldwide** ${w.avgAfter.toFixed(5)} ${trend(avgChange)} \`${avgText}\` · ` +
       `**${signed(w.net)}** ratings · ${num(w.totalAfter)} total`,
   )
-  if (delta.featured.length > 0) {
-    out.push('')
-    out.push(...delta.featured.map((c) => featuredLine(c, true)))
-  }
   out.push('')
   out.push(starTable(w.stars, delta.featured))
 

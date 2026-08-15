@@ -69,10 +69,12 @@ function appBlocks(delta: Delta): unknown[] {
           text:
             `*${delta.appName}*\n` +
             `Baseline recorded: *${w.avgAfter.toFixed(2)}* from ${num(w.totalAfter)} ratings ` +
-            `across ${delta.countryCount} storefronts.\n` +
+            `Baseline recorded.\n` +
             (delta.featured.length > 0
               ? delta.featured.map((c) => featuredLine(c, false)).join('\n') + '\n'
               : '') +
+            `*Worldwide* ${w.avgAfter.toFixed(2)} · ${num(w.totalAfter)} ratings ` +
+            `across ${delta.countryCount} storefronts\n` +
             `_First run — daily changes start tomorrow._`,
         },
       },
@@ -87,27 +89,19 @@ function appBlocks(delta: Delta): unknown[] {
   // printed next to it.
   const avgChange = Number(w.avgChange.toFixed(4))
   const avgText = `${avgChange > 0 ? '+' : avgChange < 0 ? '' : '±'}${avgChange.toFixed(4)}`
-  const headline =
-    `*${delta.appName}*  ${w.avgAfter.toFixed(2)} ${trend(avgChange)} ${avgText}\n` +
-    `${signed(w.net)} ratings  ·  ${num(w.totalAfter)} total`
-
-  const blocks: unknown[] = [
-    { type: 'section', text: { type: 'mrkdwn', text: headline } },
+  // Featured storefronts lead; worldwide closes the list as context.
+  const standings = [
+    ...delta.featured.map((c) => featuredLine(c, true)),
+    `*Worldwide* ${w.avgAfter.toFixed(2)} ${trend(avgChange)} ${avgText} · ` +
+      `${signed(w.net)} ratings · ${num(w.totalAfter)} total`,
   ]
 
-  if (delta.featured.length > 0) {
-    blocks.push({
-      type: 'context',
-      elements: [
-        { type: 'mrkdwn', text: delta.featured.map((c) => featuredLine(c, true)).join('\n') },
-      ],
-    })
-  }
-
-  blocks.push({
-    type: 'context',
-    elements: [{ type: 'mrkdwn', text: `*Net by star, worldwide*   ${starSummary(w.stars)}` }],
-  })
+  const blocks: unknown[] = [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*${delta.appName}*\n${standings.join('\n')}` },
+    },
+  ]
 
   for (const c of delta.featured) {
     if (c.isEmpty) continue
@@ -121,6 +115,11 @@ function appBlocks(delta: Delta): unknown[] {
       ],
     })
   }
+
+  blocks.push({
+    type: 'context',
+    elements: [{ type: 'mrkdwn', text: `*Net by star, worldwide*   ${starSummary(w.stars)}` }],
+  })
 
   if (delta.changedCountries.length > 0) {
     const shown = delta.changedCountries.slice(0, MAX_COUNTRIES)
@@ -156,10 +155,18 @@ function appBlocks(delta: Delta): unknown[] {
 function fallbackText(deltas: Delta[]): string {
   return deltas
     .map((d) => {
-      if (d.isFirstRun) return `${d.appName}: baseline ${d.worldwide.avgAfter.toFixed(2)}`
-      const change = Number(d.worldwide.avgChange.toFixed(4))
+      // Lead with the first featured storefront when there is one: the preview
+      // is one line, and it should show the number you actually watch.
+      const lead = d.featured.find((c) => !c.isEmpty)
+      const scope = lead
+        ? { label: `${lead.country.toUpperCase()} `, avg: lead.avgAfter, before: lead.avgBefore, net: lead.net }
+        : { label: '', avg: d.worldwide.avgAfter, before: d.worldwide.avgBefore, net: d.worldwide.net }
+
+      if (d.isFirstRun) return `${d.appName}: ${scope.label}baseline ${scope.avg.toFixed(2)}`
+
+      const change = Number((scope.avg - scope.before).toFixed(4))
       const changeText = `${change > 0 ? '+' : change < 0 ? '' : '±'}${change.toFixed(4)}`
-      return `${d.appName}: ${d.worldwide.avgAfter.toFixed(2)} (${changeText}), ${signed(d.worldwide.net)} ratings`
+      return `${d.appName}: ${scope.label}${scope.avg.toFixed(2)} (${changeText}), ${signed(scope.net)} ratings`
     })
     .join(' · ')
 }
