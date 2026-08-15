@@ -45,8 +45,12 @@ const WORKFLOW_TEMPLATE = `name: dipstick
 
 on:
   schedule:
-    # 14:00 UTC daily. GitHub's scheduler is best-effort and can run late.
-    - cron: "0 14 * * *"
+    # Deliberately not on the hour. GitHub's scheduler is best-effort and the
+    # :00 slot is the most contended on the clock -- runs there are commonly
+    # delayed by 10-30 minutes, and under heavier load GitHub drops a scheduled
+    # run outright rather than running it late. An offset minute measurably
+    # reduces both. Cron is always UTC.
+    - cron: "37 14 * * *"
   workflow_dispatch:
 
 # contents: to commit the updated history file back to the repo.
