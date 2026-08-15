@@ -1,0 +1,37 @@
+{
+  "name": "@cluestick-io/dipstick",
+  "version": "0.1.0",
+  "description": "Daily App Store rating deltas — worldwide, per-country, per-star, straight to Slack.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "dipstick": "./src/cli.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.ts\"",
+    "check": "node src/cli.ts check",
+    "verify:storefronts": "node --test \"test/storefronts.live.ts\""
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "app-store",
+    "ratings",
+    "aso",
+    "slack",
+    "ios"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cluestick-io/dipstick.git"
+  },
+  "homepage": "https://github.com/cluestick-io/dipstick#readme"
+}

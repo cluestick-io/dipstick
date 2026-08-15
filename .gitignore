@@ -1,0 +1,10 @@
+node_modules/
+*.log
+.DS_Store
+.env
+
+# This repo is the tool, not a tracker. `dipstick init` during local
+# development shouldn't leave a config or snapshots behind to be committed --
+# real tracking lives in its own repo.
+dipstick.yaml
+history/

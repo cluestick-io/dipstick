@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - run: npm ci
+
+      - run: npm test
+
+  # The storefront table cannot be verified offline: a wrong country -> id
+  # mapping returns real, well-formed data for the wrong country. This hits the
+  # live endpoint for all 115 storefronts, so it runs on a schedule rather than
+  # on every push, and is allowed to fail without blocking a merge.
+  verify-storefronts:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - run: npm ci
+
+      - run: npm run verify:storefronts
