@@ -9,6 +9,7 @@
 import {
   loadConfig,
   resolveSlackWebhook,
+  resolveGitHubToken,
   ConfigError,
   CONFIG_FILENAME,
   type Config,
@@ -19,6 +20,8 @@ import { diffSnapshot, type Delta } from './diff.ts'
 import { renderDelta, netChangeNote } from './render/terminal.ts'
 import { buildSlackMessage } from './render/slack.ts'
 import { postToSlack, SlackError } from './slack.ts'
+import { buildIssueComment } from './render/github.ts'
+import { postIssueComment, GitHubError } from './github.ts'
 import { writeScaffold } from './init.ts'
 
 const HELP = `
@@ -118,20 +121,29 @@ async function main(): Promise<number> {
       const config = loadConfig(configPath)
       const historyDir = config.historyDir
 
-      // Resolve the webhook before doing any work. Discovering a missing secret
+      // Resolve credentials before doing any work. Discovering a missing secret
       // *after* fetching and writing history would leave the run half-done:
       // recorded but never announced, which is the failure nobody notices.
       const webhook = dryRun ? undefined : resolveSlackWebhook(config)
+      const githubToken =
+        dryRun || !config.github ? undefined : resolveGitHubToken(config.github)
 
       const { deltas, snapshots } = await collect(config, date)
 
       for (const delta of deltas) console.log(renderDelta(delta))
 
       const message = buildSlackMessage(deltas)
+      const comment = buildIssueComment(deltas)
 
       if (dryRun) {
-        console.log('--- Slack payload (dry run, nothing sent) ---')
-        console.log(JSON.stringify(message, null, 2))
+        if (config.slackWebhook) {
+          console.log('--- Slack payload (dry run, nothing sent) ---')
+          console.log(JSON.stringify(message, null, 2))
+        }
+        if (config.github) {
+          console.log('--- GitHub issue comment (dry run, nothing posted) ---')
+          console.log(comment)
+        }
         console.log('--- history not written (dry run) ---')
         return 0
       }
@@ -142,8 +154,20 @@ async function main(): Promise<number> {
       if (webhook) {
         await postToSlack(webhook, message)
         console.log('Posted to Slack.')
-      } else {
-        console.log('No slack.webhookUrl configured — skipping Slack.')
+      }
+
+      if (config.github && githubToken) {
+        const { issue, url } = await postIssueComment(
+          config.github,
+          githubToken,
+          config.apps.map((a) => a.name),
+          comment,
+        )
+        console.log(`Posted to ${config.github.repo}#${issue} — ${url}`)
+      }
+
+      if (!webhook && !config.github) {
+        console.log('No notifier configured — recorded history only.')
       }
       return 0
     }
@@ -178,7 +202,7 @@ main()
     // Config and Slack problems are environment/user error: show the
     // (deliberately actionable) message without a stack trace. Anything else
     // is a real bug and deserves the full trace.
-    if (err instanceof ConfigError || err instanceof SlackError) {
+    if (err instanceof ConfigError || err instanceof SlackError || err instanceof GitHubError) {
       console.error(`\n${err.message}\n`)
     } else {
       console.error(err)

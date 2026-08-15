@@ -16,11 +16,18 @@ apps:
   - id: "284882215"
     name: Facebook
 
-# Where to post the daily digest.
+# Post the daily report as a comment on a GitHub issue.
+# Inside GitHub Actions this needs no setup at all: the repo and token come
+# from the environment. "auto" finds dipstick's issue or opens one.
+github:
+  issue: auto
+
+# Or post to Slack instead of / as well as the above.
 # Create an Incoming Webhook at https://api.slack.com/messaging/webhooks
-# and store the URL as a secret rather than committing it.
-slack:
-  webhookUrl: env:SLACK_WEBHOOK_URL
+# and keep the URL in a secret rather than in this file.
+#
+# slack:
+#   webhookUrl: env:SLACK_WEBHOOK_URL
 
 # countries: omitted means all 115 App Store storefronts.
 # Narrow it only if you want a smaller report:
@@ -38,9 +45,11 @@ on:
     - cron: "0 14 * * *"
   workflow_dispatch:
 
-# Needed to commit the updated history file back to the repo.
+# contents: to commit the updated history file back to the repo.
+# issues:   to post the daily report as an issue comment.
 permissions:
   contents: write
+  issues: write
 
 jobs:
   ratings:
@@ -56,6 +65,9 @@ jobs:
       # (npx --yes @cluestick-io/dipstick run) once it is published.
       - run: npx --yes github:cluestick-io/dipstick run
         env:
+          # Provided automatically by Actions — nothing to configure.
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          # Only needed if you enable the slack block in dipstick.yaml.
           SLACK_WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Commit today's snapshot
@@ -112,8 +124,8 @@ export function writeScaffold(cwd = process.cwd()): void {
 Next:
   1. Edit ${CONFIG_FILENAME} and replace the example app with your own.
   2. Run \`dipstick check\` to confirm it fetches.
-  3. Add SLACK_WEBHOOK_URL to your repo secrets (Settings → Secrets → Actions).
-  4. Commit. The workflow runs daily and commits history back.
+  3. Commit and push. The workflow runs daily, posts the report to a GitHub
+     issue, and commits history back — no secrets required.
 
 The first run records a baseline only — deltas start on day two.`)
 }

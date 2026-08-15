@@ -28,7 +28,18 @@ export type Config = {
    * Call `resolveSlackWebhook` at the point of posting instead.
    */
   slackWebhook?: string
+  /** Absent when GitHub issue posting isn't configured. */
+  github?: GitHubConfig
   historyDir: string
+}
+
+export type GitHubConfig = {
+  /** "owner/name". Defaults to $GITHUB_REPOSITORY, which Actions always sets. */
+  repo: string
+  /** An issue number, or 'auto' to find-or-create one. */
+  issue: number | 'auto'
+  /** Raw token spec, resolved at post time like the Slack webhook. */
+  token: string
 }
 
 export class ConfigError extends Error {
@@ -126,8 +137,49 @@ export function parseConfig(source: string, env = process.env): Config {
     apps,
     countries: resolveCountries(cfg.countries),
     slackWebhook: slack?.webhookUrl ? String(slack.webhookUrl) : undefined,
+    github: parseGitHub(cfg.github, env),
     historyDir: cfg.historyDir ? String(cfg.historyDir) : 'history',
   }
+}
+
+function parseGitHub(raw: unknown, env: NodeJS.ProcessEnv): GitHubConfig | undefined {
+  if (raw === undefined || raw === null || raw === false) return undefined
+
+  const cfg = (typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+
+  // Both default to what GitHub Actions already provides, so the common case
+  // needs no repo, no token, and no secret of any kind.
+  const repo = cfg.repo ? String(cfg.repo) : env.GITHUB_REPOSITORY
+  if (!repo) {
+    throw new ConfigError(
+      `github.repo is not set and $GITHUB_REPOSITORY is unavailable.\n` +
+        `Set it explicitly when running outside GitHub Actions:\n\n` +
+        `github:\n  repo: owner/name\n  issue: auto`,
+    )
+  }
+  if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) {
+    throw new ConfigError(`github.repo must be "owner/name", got ${JSON.stringify(repo)}.`)
+  }
+
+  const rawIssue = cfg.issue ?? 'auto'
+  let issue: number | 'auto'
+  if (rawIssue === 'auto') {
+    issue = 'auto'
+  } else {
+    issue = Number(rawIssue)
+    if (!Number.isInteger(issue) || issue <= 0) {
+      throw new ConfigError(
+        `github.issue must be a positive issue number or "auto", got ${JSON.stringify(rawIssue)}.`,
+      )
+    }
+  }
+
+  return { repo, issue, token: cfg.token ? String(cfg.token) : 'env:GITHUB_TOKEN' }
+}
+
+/** Resolve the GitHub token only when about to post, mirroring the Slack path. */
+export function resolveGitHubToken(github: GitHubConfig): string {
+  return resolveSecret(github.token, 'github.token')
 }
 
 /**
