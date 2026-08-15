@@ -19,6 +19,14 @@ export type Config = {
   /** Resolved country list -- always concrete, never "all". */
   countries: string[]
   /**
+   * Storefronts always shown in the report, even on a day they did not move.
+   *
+   * Without this the report's shape changes daily and there is nothing to
+   * anchor on -- a quiet day for your main market looks the same as that
+   * market being missing.
+   */
+  featured: string[]
+  /**
    * The raw `slack.webhookUrl` value, still unresolved. Absent when Slack
    * isn't configured.
    *
@@ -34,8 +42,14 @@ export type Config = {
 }
 
 export type GitHubConfig = {
-  /** "owner/name". Defaults to $GITHUB_REPOSITORY, which Actions always sets. */
-  repo: string
+  /**
+   * "owner/name", or undefined to fall back to $GITHUB_REPOSITORY at post time.
+   *
+   * Deliberately unresolved at load time: `check` and `--dry-run` never post,
+   * and requiring the Actions environment just to read ratings would make the
+   * read-only commands unusable on a laptop.
+   */
+  repo?: string
   /** An issue number, or 'auto' to find-or-create one. */
   issue: number | 'auto'
   /** Raw token spec, resolved at post time like the Slack webhook. */
@@ -98,6 +112,26 @@ export function resolveCountries(raw: unknown): string[] {
   return [...new Set(codes)]
 }
 
+/**
+ * Normalise the featured list. Accepts a bare string for the common single
+ * case (`featured: us`) as well as a list.
+ */
+export function resolveFeatured(raw: unknown): string[] {
+  if (raw === undefined || raw === null) return []
+
+  const list = Array.isArray(raw) ? raw : [raw]
+  const codes = list.map((c) => String(c).toLowerCase())
+
+  const unknown = codes.filter((c) => !(c in STOREFRONTS))
+  if (unknown.length > 0) {
+    throw new ConfigError(
+      `Unknown country code(s) in "featured": ${unknown.join(', ')}.\n` +
+        `Valid codes are the ${ALL_COUNTRIES.length} App Store storefronts, e.g. us, gb, de, jp.`,
+    )
+  }
+  return [...new Set(codes)]
+}
+
 export function parseConfig(source: string, env = process.env): Config {
   let raw: unknown
   try {
@@ -133,9 +167,17 @@ export function parseConfig(source: string, env = process.env): Config {
 
   const slack = cfg.slack as Record<string, unknown> | undefined
 
+  const featured = resolveFeatured(cfg.featured)
+  const countries = resolveCountries(cfg.countries)
+
+  // A featured storefront that isn't being fetched would silently report
+  // nothing forever. Fetching it is clearly what was meant.
+  const missing = featured.filter((c) => !countries.includes(c))
+
   return {
     apps,
-    countries: resolveCountries(cfg.countries),
+    countries: [...countries, ...missing],
+    featured,
     slackWebhook: slack?.webhookUrl ? String(slack.webhookUrl) : undefined,
     github: parseGitHub(cfg.github, env),
     historyDir: cfg.historyDir ? String(cfg.historyDir) : 'history',
@@ -147,17 +189,10 @@ function parseGitHub(raw: unknown, env: NodeJS.ProcessEnv): GitHubConfig | undef
 
   const cfg = (typeof raw === 'object' ? raw : {}) as Record<string, unknown>
 
-  // Both default to what GitHub Actions already provides, so the common case
-  // needs no repo, no token, and no secret of any kind.
-  const repo = cfg.repo ? String(cfg.repo) : env.GITHUB_REPOSITORY
-  if (!repo) {
-    throw new ConfigError(
-      `github.repo is not set and $GITHUB_REPOSITORY is unavailable.\n` +
-        `Set it explicitly when running outside GitHub Actions:\n\n` +
-        `github:\n  repo: owner/name\n  issue: auto`,
-    )
-  }
-  if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) {
+  // Shape is checked now (a typo is worth catching early), but an absent repo
+  // is fine here -- it resolves from the environment at post time.
+  const repo = cfg.repo ? String(cfg.repo) : undefined
+  if (repo !== undefined && !/^[^/\s]+\/[^/\s]+$/.test(repo)) {
     throw new ConfigError(`github.repo must be "owner/name", got ${JSON.stringify(repo)}.`)
   }
 
@@ -177,9 +212,23 @@ function parseGitHub(raw: unknown, env: NodeJS.ProcessEnv): GitHubConfig | undef
   return { repo, issue, token: cfg.token ? String(cfg.token) : 'env:GITHUB_TOKEN' }
 }
 
-/** Resolve the GitHub token only when about to post, mirroring the Slack path. */
-export function resolveGitHubToken(github: GitHubConfig): string {
-  return resolveSecret(github.token, 'github.token')
+/**
+ * Resolve repo and token only when about to post, mirroring the Slack path.
+ * Inside Actions both come from the environment, so nothing is configured.
+ */
+export function resolveGitHubTarget(
+  github: GitHubConfig,
+  env = process.env,
+): { repo: string; token: string } {
+  const repo = github.repo ?? env.GITHUB_REPOSITORY
+  if (!repo) {
+    throw new ConfigError(
+      `github.repo is not set and $GITHUB_REPOSITORY is unavailable.\n` +
+        `Inside GitHub Actions it is provided automatically. Running elsewhere, set it:\n\n` +
+        `github:\n  repo: owner/name\n  issue: auto`,
+    )
+  }
+  return { repo, token: resolveSecret(github.token, 'github.token') }
 }
 
 /**

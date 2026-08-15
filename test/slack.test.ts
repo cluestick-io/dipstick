@@ -21,6 +21,7 @@ const MESSAGE = buildSlackMessage([
       avgChange: 0,
       stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 10 },
     },
+    featured: [],
     changedCountries: [],
     failures: [],
   },

@@ -29,6 +29,10 @@ github:
 # slack:
 #   webhookUrl: env:SLACK_WEBHOOK_URL
 
+# Storefronts always shown, even on a day they didn't move — so the report
+# has a consistent anchor instead of changing shape daily.
+featured: [us]
+
 # countries: omitted means all 115 App Store storefronts.
 # Narrow it only if you want a smaller report:
 #

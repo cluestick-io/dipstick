@@ -24,6 +24,11 @@ export type CountryDelta = {
   stars: StarDeltas
   avgBefore: number
   avgAfter: number
+  /** Absolute totals, needed to show a featured country's standing on a flat day. */
+  totalBefore: number
+  totalAfter: number
+  /** True when the storefront has no ratings at all, as opposed to none *new*. */
+  isEmpty: boolean
 }
 
 export type Delta = {
@@ -44,6 +49,11 @@ export type Delta = {
     avgChange: number
     stars: StarDeltas
   }
+  /**
+   * Storefronts pinned by config, always present in config order even when
+   * nothing moved. Excluded from `changedCountries` so they never appear twice.
+   */
+  featured: CountryDelta[]
   /** Only countries whose rating count actually moved, biggest movement first. */
   changedCountries: CountryDelta[]
   failures: { country: string; reason: string }[]
@@ -66,7 +76,30 @@ export function hasMovement(stars: StarDeltas): boolean {
   return STARS.some((s) => stars[s] !== 0)
 }
 
-export function diffSnapshot(snapshot: Snapshot, baseline?: HistoryRow): Delta {
+function countryDelta(
+  country: string,
+  after: Histogram,
+  before: Histogram,
+): CountryDelta {
+  const totalAfter = totalRatings(after)
+  const totalBefore = totalRatings(before)
+  return {
+    country,
+    net: totalAfter - totalBefore,
+    stars: starDeltas(after, before),
+    avgBefore: averageRating(before),
+    avgAfter: averageRating(after),
+    totalBefore,
+    totalAfter,
+    isEmpty: totalAfter === 0,
+  }
+}
+
+export function diffSnapshot(
+  snapshot: Snapshot,
+  baseline?: HistoryRow,
+  featuredCountries: string[] = [],
+): Delta {
   const isFirstRun = baseline === undefined
   const before = baseline ? rowToHistograms(baseline) : {}
 
@@ -89,20 +122,26 @@ export function diffSnapshot(snapshot: Snapshot, baseline?: HistoryRow): Delta {
   // or a fetch failure) and that is itself a change worth surfacing.
   const allCountries = new Set([...Object.keys(snapshot.countries), ...Object.keys(before)])
 
+  const isFeatured = new Set(featuredCountries)
+
   for (const country of allCountries) {
+    // Featured storefronts get their own section, so listing them here too
+    // would just say the same thing twice.
+    if (isFeatured.has(country)) continue
+
     const after = snapshot.countries[country] ?? ZERO
     const prior = before[country] ?? ZERO
-    const stars = starDeltas(after, prior)
-    if (!hasMovement(stars)) continue
+    if (!hasMovement(starDeltas(after, prior))) continue
 
-    changedCountries.push({
-      country,
-      net: totalRatings(after) - totalRatings(prior),
-      stars,
-      avgBefore: averageRating(prior),
-      avgAfter: averageRating(after),
-    })
+    changedCountries.push(countryDelta(country, after, prior))
   }
+
+  // Built in config order, and unconditionally: a featured storefront showing
+  // ±0 is the point -- it confirms nothing happened, rather than leaving you to
+  // wonder whether it was quiet or simply missing.
+  const featured = featuredCountries.map((country) =>
+    countryDelta(country, snapshot.countries[country] ?? ZERO, before[country] ?? ZERO),
+  )
 
   // Rank by magnitude, so the biggest movers lead regardless of direction.
   changedCountries.sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || a.country.localeCompare(b.country))
@@ -123,6 +162,9 @@ export function diffSnapshot(snapshot: Snapshot, baseline?: HistoryRow): Delta {
       avgChange: isFirstRun ? 0 : avgAfter - avgBefore,
       stars: starDeltas(snapshot.worldwide.histogram, worldwideBefore),
     },
+    // Featured storefronts still appear on a first run -- showing their
+    // starting position is useful even though there is no change to report.
+    featured,
     changedCountries: isFirstRun ? [] : changedCountries,
     failures: snapshot.failures,
   }

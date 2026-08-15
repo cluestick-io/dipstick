@@ -9,7 +9,7 @@
 import {
   loadConfig,
   resolveSlackWebhook,
-  resolveGitHubToken,
+  resolveGitHubTarget,
   ConfigError,
   CONFIG_FILENAME,
   type Config,
@@ -86,7 +86,7 @@ async function collect(
 
     const snapshot = await takeSnapshot(app, config.countries, { date, knownNonZero })
     snapshots.push(snapshot)
-    deltas.push(diffSnapshot(snapshot, baseline))
+    deltas.push(diffSnapshot(snapshot, baseline, config.featured))
   }
 
   return { deltas, snapshots }
@@ -125,8 +125,8 @@ async function main(): Promise<number> {
       // *after* fetching and writing history would leave the run half-done:
       // recorded but never announced, which is the failure nobody notices.
       const webhook = dryRun ? undefined : resolveSlackWebhook(config)
-      const githubToken =
-        dryRun || !config.github ? undefined : resolveGitHubToken(config.github)
+      const githubTarget =
+        dryRun || !config.github ? undefined : resolveGitHubTarget(config.github)
 
       const { deltas, snapshots } = await collect(config, date)
 
@@ -156,14 +156,15 @@ async function main(): Promise<number> {
         console.log('Posted to Slack.')
       }
 
-      if (config.github && githubToken) {
+      if (config.github && githubTarget) {
         const { issue, url } = await postIssueComment(
-          config.github,
-          githubToken,
+          githubTarget.repo,
+          githubTarget.token,
+          config.github.issue,
           config.apps.map((a) => a.name),
           comment,
         )
-        console.log(`Posted to ${config.github.repo}#${issue} — ${url}`)
+        console.log(`Posted to ${githubTarget.repo}#${issue} — ${url}`)
       }
 
       if (!webhook && !config.github) {

@@ -1,7 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseConfig, resolveCountries, resolveSlackWebhook, ConfigError } from '../src/config.ts'
+import {
+  parseConfig,
+  resolveCountries,
+  resolveFeatured,
+  resolveSlackWebhook,
+  ConfigError,
+} from '../src/config.ts'
 import { ALL_COUNTRIES } from '../src/storefronts.ts'
 
 const MINIMAL = `
@@ -32,6 +38,24 @@ test('an explicit country list narrows the run and is case-insensitive', () => {
 
 test('duplicate countries are collapsed', () => {
   assert.deepEqual(resolveCountries(['us', 'us', 'gb']), ['us', 'gb'])
+})
+
+test('featured accepts a bare string as well as a list', () => {
+  assert.deepEqual(resolveFeatured('us'), ['us'])
+  assert.deepEqual(resolveFeatured(['us', 'GB']), ['us', 'gb'])
+  assert.deepEqual(resolveFeatured(undefined), [])
+})
+
+test('an unknown featured country fails loudly', () => {
+  assert.throws(() => resolveFeatured(['uk']), ConfigError)
+})
+
+test('a featured country is fetched even when countries is narrowed', () => {
+  // Otherwise the featured storefront would silently report nothing forever.
+  const cfg = parseConfig(`${MINIMAL}\ncountries: [gb]\nfeatured: [us]\n`)
+  assert.ok(cfg.countries.includes('us'), 'us must be fetched to be reported')
+  assert.ok(cfg.countries.includes('gb'))
+  assert.deepEqual(cfg.featured, ['us'])
 })
 
 test('an unknown country code fails loudly rather than being skipped', () => {

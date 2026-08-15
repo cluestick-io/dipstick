@@ -5,7 +5,7 @@
  * network, so the exact comment can be asserted in tests and previewed with
  * `run --dry-run`.
  */
-import type { Delta, StarDeltas } from '../diff.ts'
+import type { CountryDelta, Delta, StarDeltas } from '../diff.ts'
 
 /** Country rows beyond this go inside the collapsed section's tail. */
 const MAX_COUNTRIES = 12
@@ -19,9 +19,39 @@ function trend(change: number): string {
   return '='
 }
 
-function starTable(stars: StarDeltas): string {
-  const rows = ([5, 4, 3, 2, 1] as const).map((s) => `| ${'★'.repeat(s)} | ${signed(stars[s])} |`)
-  return ['| Rating | Net change |', '| --- | --- |', ...rows].join('\n')
+/**
+ * One column per scope: worldwide plus each featured storefront. Keeping them
+ * side by side is what makes "the US drove all of today's 1★" visible at a
+ * glance instead of requiring arithmetic across two tables.
+ */
+function starTable(worldwide: StarDeltas, featured: CountryDelta[]): string {
+  const shown = featured.filter((c) => !c.isEmpty)
+  const header = ['Rating', 'Worldwide', ...shown.map((c) => c.country.toUpperCase())]
+  const rows = ([5, 4, 3, 2, 1] as const).map((s) =>
+    ['★'.repeat(s), signed(worldwide[s]), ...shown.map((c) => signed(c.stars[s]))],
+  )
+
+  return [
+    `| ${header.join(' | ')} |`,
+    `| ${header.map(() => '---').join(' | ')} |`,
+    ...rows.map((r) => `| ${r.join(' | ')} |`),
+  ].join('\n')
+}
+
+/** A featured storefront's standing line, shown whether or not it moved. */
+function featuredLine(c: CountryDelta, showChange: boolean): string {
+  const label = `\`${c.country.toUpperCase()}\``
+
+  if (c.isEmpty) return `- ${label} — _no ratings in this storefront_`
+  if (!showChange) return `- ${label} **${c.avgAfter.toFixed(5)}** · ${num(c.totalAfter)} ratings`
+
+  const change = Number((c.avgAfter - c.avgBefore).toFixed(5))
+  const text = `${change > 0 ? '+' : change < 0 ? '' : '±'}${change.toFixed(5)}`
+
+  return (
+    `- ${label} **${c.avgAfter.toFixed(5)}** ${trend(change)} \`${text}\` · ` +
+    `**${signed(c.net)}** ratings · ${num(c.totalAfter)} total`
+  )
 }
 
 function appSection(delta: Delta): string {
@@ -36,6 +66,10 @@ function appSection(delta: Delta): string {
       `Baseline recorded: **${w.avgAfter.toFixed(5)}** from ${num(w.totalAfter)} ratings ` +
         `across ${delta.countryCount} storefronts.`,
     )
+    if (delta.featured.length > 0) {
+      out.push('')
+      out.push(...delta.featured.map((c) => featuredLine(c, false)))
+    }
     out.push('')
     out.push('_First run — daily changes start tomorrow._')
     if (delta.failures.length > 0) out.push('', failureNote(delta))
@@ -48,11 +82,15 @@ function appSection(delta: Delta): string {
 
   out.push('')
   out.push(
-    `**${w.avgAfter.toFixed(5)}** ${trend(avgChange)} \`${avgText}\` · ` +
+    `**Worldwide** — **${w.avgAfter.toFixed(5)}** ${trend(avgChange)} \`${avgText}\` · ` +
       `**${signed(w.net)}** ratings · ${num(w.totalAfter)} total`,
   )
+  if (delta.featured.length > 0) {
+    out.push('')
+    out.push(...delta.featured.map((c) => featuredLine(c, true)))
+  }
   out.push('')
-  out.push(starTable(w.stars))
+  out.push(starTable(w.stars, delta.featured))
 
   if (delta.changedCountries.length > 0) {
     const shown = delta.changedCountries.slice(0, MAX_COUNTRIES)

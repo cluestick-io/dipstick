@@ -2,7 +2,25 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { buildSlackMessage } from '../src/render/slack.ts'
-import type { Delta } from '../src/diff.ts'
+import type { CountryDelta, Delta } from '../src/diff.ts'
+
+export function country(
+  code: string,
+  net: number,
+  stars: CountryDelta['stars'],
+  totalAfter = 5000,
+): CountryDelta {
+  return {
+    country: code,
+    net,
+    stars,
+    avgBefore: 4.5,
+    avgAfter: 4.52,
+    totalBefore: totalAfter - net,
+    totalAfter,
+    isEmpty: totalAfter === 0,
+  }
+}
 
 function delta(over: Partial<Delta> = {}): Delta {
   return {
@@ -21,9 +39,8 @@ function delta(over: Partial<Delta> = {}): Delta {
       avgChange: 0.01,
       stars: { 1: 28, 2: 0, 3: 3, 4: 0, 5: 610 },
     },
-    changedCountries: [
-      { country: 'us', net: 440, stars: { 1: 28, 2: 0, 3: 0, 4: 0, 5: 412 }, avgBefore: 4.5, avgAfter: 4.52 },
-    ],
+    featured: [],
+    changedCountries: [country('us', 440, { 1: 28, 2: 0, 3: 0, 4: 0, 5: 412 })],
     failures: [],
     ...over,
   }

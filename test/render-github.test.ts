@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { buildIssueComment, buildIssueBody } from '../src/render/github.ts'
-import type { Delta } from '../src/diff.ts'
+import type { CountryDelta, Delta } from '../src/diff.ts'
 
 function delta(over: Partial<Delta> = {}): Delta {
   return {
@@ -21,12 +21,31 @@ function delta(over: Partial<Delta> = {}): Delta {
       avgChange: 0.00043,
       stars: { 1: 2, 2: 0, 3: 0, 4: 0, 5: 8 },
     },
+    featured: [],
     changedCountries: [
-      { country: 'us', net: 9, stars: { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 }, avgBefore: 4.5, avgAfter: 4.52 },
-      { country: 'gb', net: 1, stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 }, avgBefore: 4.6, avgAfter: 4.6 },
+      country('us', 9, { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 }),
+      country('gb', 1, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 }),
     ],
     failures: [],
     ...over,
+  }
+}
+
+function country(
+  code: string,
+  net: number,
+  stars: CountryDelta['stars'],
+  totalAfter = 5000,
+): CountryDelta {
+  return {
+    country: code,
+    net,
+    stars,
+    avgBefore: 4.5,
+    avgAfter: 4.52,
+    totalBefore: totalAfter - net,
+    totalAfter,
+    isEmpty: totalAfter === 0,
   }
 }
 
@@ -38,9 +57,50 @@ test('the comment leads with the date and the app name', () => {
 
 test('per-star net changes render as a table', () => {
   const md = buildIssueComment([delta()])
-  assert.match(md, /\| Rating \| Net change \|/)
+  assert.match(md, /\| Rating \| Worldwide \|/)
   assert.match(md, /\| ★★★★★ \| \+8 \|/)
   assert.match(md, /\| ★ \| \+2 \|/)
+})
+
+test('a featured storefront gets its own column beside worldwide', () => {
+  // Side by side is what makes "the US drove all of today's 1★" visible
+  // without doing arithmetic across two separate tables.
+  const md = buildIssueComment([
+    delta({ featured: [country('us', 9, { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 })] }),
+  ])
+  assert.match(md, /\| Rating \| Worldwide \| US \|/)
+  assert.match(md, /\| ★★★★★ \| \+8 \| \+7 \|/)
+  assert.match(md, /\| ★ \| \+2 \| \+2 \|/)
+})
+
+test('a featured storefront is shown even when it did not move', () => {
+  // The whole point: ±0 confirms a quiet day, rather than leaving you to
+  // wonder whether the storefront was quiet or simply absent.
+  const flat = country('us', 0, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 })
+  const md = buildIssueComment([delta({ featured: [{ ...flat, avgBefore: 4.52, avgAfter: 4.52 }] })])
+  assert.match(md, /`US`/)
+  assert.match(md, /±0\.00000/)
+})
+
+test('a featured storefront with no ratings says so plainly', () => {
+  const empty = country('jp', 0, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, 0)
+  const md = buildIssueComment([delta({ featured: [empty] })])
+  assert.match(md, /no ratings in this storefront/)
+  // An empty storefront must not add a meaningless all-zero column.
+  assert.doesNotMatch(md, /\| Rating \| Worldwide \| JP \|/)
+})
+
+test('a featured storefront is not repeated in the moved list', () => {
+  // diffSnapshot excludes featured from changedCountries; this pins the
+  // rendering side of that contract.
+  const md = buildIssueComment([
+    delta({
+      featured: [country('us', 9, { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 })],
+      changedCountries: [country('gb', 1, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 })],
+    }),
+  ])
+  assert.match(md, /Countries that moved \(1\)/)
+  assert.doesNotMatch(md, /\| `US` \| \+9/)
 })
 
 test('countries that moved go in a collapsed section', () => {

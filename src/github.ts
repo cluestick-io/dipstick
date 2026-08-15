@@ -6,7 +6,7 @@
  * account to create, no webhook to mint, and no secret to store. GitHub's own
  * notifications then deliver it to email and the mobile app.
  */
-import type { GitHubConfig } from './config.ts'
+
 import { buildIssueBody } from './render/github.ts'
 
 /** Marks the issue dipstick owns, so it can find it again without title matching. */
@@ -102,17 +102,15 @@ async function resolveIssueNumber(
 }
 
 export async function postIssueComment(
-  github: GitHubConfig,
+  repo: string,
   token: string,
+  wanted: number | 'auto',
   appNames: string[],
   comment: string,
 ): Promise<{ issue: number; url: string }> {
-  const issue =
-    github.issue === 'auto'
-      ? await resolveIssueNumber(token, github.repo, appNames)
-      : github.issue
+  const issue = wanted === 'auto' ? await resolveIssueNumber(token, repo, appNames) : wanted
 
-  const { body } = await api(token, `/repos/${github.repo}/issues/${issue}/comments`, {
+  const { body } = await api(token, `/repos/${repo}/issues/${issue}/comments`, {
     method: 'POST',
     body: JSON.stringify({ body: comment }),
   })

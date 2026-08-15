@@ -4,7 +4,7 @@
  * Pure: it returns an object and never touches the network, so the exact
  * message can be asserted in tests and previewed with `run --dry-run`.
  */
-import type { Delta, StarDeltas } from '../diff.ts'
+import type { CountryDelta, Delta, StarDeltas } from '../diff.ts'
 
 /** Beyond this, a global launch day would flood the channel. */
 const MAX_COUNTRIES = 8
@@ -25,6 +25,19 @@ function trend(change: number): string {
 
 function starSummary(stars: StarDeltas): string {
   return ([5, 4, 3, 2, 1] as const).map((s) => `${s}★ ${signed(stars[s])}`).join('   ')
+}
+
+/** A featured storefront's standing line, shown whether or not it moved. */
+function featuredLine(c: CountryDelta, showChange: boolean): string {
+  const label = `\`${c.country.toUpperCase()}\``
+
+  if (c.isEmpty) return `${label} _no ratings in this storefront_`
+  if (!showChange) return `${label} *${c.avgAfter.toFixed(2)}* · ${num(c.totalAfter)} ratings`
+
+  const change = Number((c.avgAfter - c.avgBefore).toFixed(4))
+  const text = `${change > 0 ? '+' : change < 0 ? '' : '±'}${change.toFixed(4)}`
+
+  return `${label} *${c.avgAfter.toFixed(2)}* ${trend(change)} ${text} · ${signed(c.net)} ratings`
 }
 
 function failureBlock(delta: Delta): unknown {
@@ -57,6 +70,9 @@ function appBlocks(delta: Delta): unknown[] {
             `*${delta.appName}*\n` +
             `Baseline recorded: *${w.avgAfter.toFixed(2)}* from ${num(w.totalAfter)} ratings ` +
             `across ${delta.countryCount} storefronts.\n` +
+            (delta.featured.length > 0
+              ? delta.featured.map((c) => featuredLine(c, false)).join('\n') + '\n'
+              : '') +
             `_First run — daily changes start tomorrow._`,
         },
       },
@@ -77,11 +93,34 @@ function appBlocks(delta: Delta): unknown[] {
 
   const blocks: unknown[] = [
     { type: 'section', text: { type: 'mrkdwn', text: headline } },
-    {
-      type: 'context',
-      elements: [{ type: 'mrkdwn', text: `*Net by star*   ${starSummary(w.stars)}` }],
-    },
   ]
+
+  if (delta.featured.length > 0) {
+    blocks.push({
+      type: 'context',
+      elements: [
+        { type: 'mrkdwn', text: delta.featured.map((c) => featuredLine(c, true)).join('\n') },
+      ],
+    })
+  }
+
+  blocks.push({
+    type: 'context',
+    elements: [{ type: 'mrkdwn', text: `*Net by star, worldwide*   ${starSummary(w.stars)}` }],
+  })
+
+  for (const c of delta.featured) {
+    if (c.isEmpty) continue
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `*Net by star, ${c.country.toUpperCase()}*   ${starSummary(c.stars)}`,
+        },
+      ],
+    })
+  }
 
   if (delta.changedCountries.length > 0) {
     const shown = delta.changedCountries.slice(0, MAX_COUNTRIES)

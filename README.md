@@ -58,6 +58,30 @@ slack:
 
 `id` is the numeric App Store ID from the store URL (`apps.apple.com/app/id284882215`).
 
+### Featured storefronts
+
+By default a country appears only when it moved, so the report changes shape daily and a
+quiet day for your main market looks identical to that market being absent. Pin the ones
+you always want to see:
+
+```yaml
+featured: [us]
+```
+
+A featured storefront is shown whether or not it moved, in the order listed, and gets its
+own column in the per-star table — which is what makes "every new 1★ today came from the
+US" visible without arithmetic:
+
+```
+| Rating | Worldwide | US |
+| ★★★★★  | +8        | +7 |
+| ★      | +2        | +2 |
+```
+
+It is excluded from "countries that moved" so it never appears twice, and it is fetched
+even when `countries` is narrowed to a list that omits it — otherwise it would silently
+report nothing forever.
+
 **Countries are all 115 storefronts by default.** Omit the key entirely and you get
 worldwide coverage. Narrow it only if you want a smaller report:
 

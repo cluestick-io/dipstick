@@ -117,6 +117,60 @@ test('an unchanged day produces an empty country list and zero movement', () => 
   assert.equal(delta.worldwide.avgChange, 0)
 })
 
+test('a featured country appears even on a day it did not move', () => {
+  // The reason the feature exists: a flat day must be visibly flat, not absent.
+  const countries = { us: h(10, 5, 5, 20, 60), gb: h(1, 1, 1, 1, 10) }
+  const delta = diffSnapshot(
+    snapshot('2026-08-14', countries),
+    toRow(snapshot('2026-08-13', countries)),
+    ['us'],
+  )
+
+  assert.equal(delta.featured.length, 1)
+  assert.equal(delta.featured[0].country, 'us')
+  assert.equal(delta.featured[0].net, 0)
+  assert.equal(delta.featured[0].totalAfter, 100)
+  assert.deepEqual(delta.changedCountries, [])
+})
+
+test('a featured country is excluded from the moved list, never listed twice', () => {
+  const before = toRow(snapshot('2026-08-13', { us: h(10, 5, 5, 20, 60), gb: h(1, 1, 1, 1, 10) }))
+  const after = snapshot('2026-08-14', { us: h(11, 5, 5, 20, 65), gb: h(1, 1, 1, 1, 12) })
+
+  const delta = diffSnapshot(after, before, ['us'])
+
+  assert.deepEqual(delta.featured.map((c) => c.country), ['us'])
+  assert.deepEqual(delta.changedCountries.map((c) => c.country), ['gb'])
+})
+
+test('featured countries keep config order, not movement order', () => {
+  const countries = { us: h(0, 0, 0, 0, 10), gb: h(0, 0, 0, 0, 5000) }
+  const delta = diffSnapshot(
+    snapshot('2026-08-14', countries),
+    toRow(snapshot('2026-08-13', countries)),
+    ['us', 'gb'],
+  )
+  // gb is far larger, but us was listed first and stays first so the report
+  // reads the same way every day.
+  assert.deepEqual(delta.featured.map((c) => c.country), ['us', 'gb'])
+})
+
+test('a featured country with no ratings is flagged empty rather than shown as 0.00', () => {
+  const delta = diffSnapshot(snapshot('2026-08-14', { us: h(1, 1, 1, 1, 1) }), undefined, ['jp'])
+  assert.equal(delta.featured[0].country, 'jp')
+  assert.equal(delta.featured[0].isEmpty, true)
+  assert.equal(delta.featured[0].totalAfter, 0)
+})
+
+test('featured countries are present on a first run too', () => {
+  const delta = diffSnapshot(snapshot('2026-08-14', { us: h(10, 5, 5, 20, 60) }), undefined, ['us'])
+  assert.equal(delta.isFirstRun, true)
+  assert.equal(delta.featured.length, 1)
+  assert.equal(delta.featured[0].totalAfter, 100)
+  // No baseline, so there is no change to claim.
+  assert.equal(delta.featured[0].net, 100 - 0)
+})
+
 test('average movement is tracked even when the net count is unchanged', () => {
   // A user editing 1★ to 5★ leaves the total flat but moves the average -- the
   // exact signal a count-only tool would miss.

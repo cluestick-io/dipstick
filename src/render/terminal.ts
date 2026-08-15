@@ -4,7 +4,7 @@
  * Colour is disabled when stdout isn't a TTY or NO_COLOR is set, so piping to a
  * file or a CI log yields clean text.
  */
-import type { Delta, StarDeltas } from '../diff.ts'
+import type { CountryDelta, Delta, StarDeltas } from '../diff.ts'
 
 const useColor = process.stdout.isTTY === true && !process.env.NO_COLOR
 
@@ -31,10 +31,38 @@ function arrow(change: number): string {
   return dim('=')
 }
 
+const hasStarMovement = (stars: StarDeltas) => ([1, 2, 3, 4, 5] as const).some((s) => stars[s] !== 0)
+
 function starLine(stars: StarDeltas): string {
   return ([5, 4, 3, 2, 1] as const)
     .map((s) => `${dim(`${s}★`)} ${signed(stars[s])}`)
     .join('   ')
+}
+
+/**
+ * A featured storefront, formatted to line up under the Worldwide row.
+ *
+ * `showChange` is false on a first run, where there is nothing to compare to.
+ */
+function featuredLine(c: CountryDelta, showChange: boolean): string {
+  const label = bold(c.country.toUpperCase().padEnd(9))
+
+  if (c.isEmpty) {
+    return `  ${label}   ${dim('no ratings in this storefront')}`
+  }
+
+  if (!showChange) {
+    return `  ${label}   ${bold(c.avgAfter.toFixed(5))}   ${num(c.totalAfter)} ratings`
+  }
+
+  const change = Number((c.avgAfter - c.avgBefore).toFixed(5))
+  const text = `${change > 0 ? '+' : change < 0 ? '' : '±'}${change.toFixed(5)}`
+  const painted = change === 0 ? dim(text) : change > 0 ? green(text) : red(text)
+
+  return (
+    `  ${label}   ${bold(c.avgAfter.toFixed(5))} ${arrow(change)} ${painted}   ` +
+    `${num(c.totalAfter)} ratings  (${signed(c.net)})`
+  )
 }
 
 /** Rendered for both first runs and normal ones -- a partial run must never look complete. */
@@ -67,6 +95,7 @@ export function renderDelta(delta: Delta, { maxCountries = 15 } = {}): string {
       `  ${bold('Worldwide')}   ${bold(w.avgAfter.toFixed(5))}   ` +
         `${num(w.totalAfter)} ratings across ${delta.countryCount} storefronts`,
     )
+    for (const c of delta.featured) out.push(featuredLine(c, false))
     // A baseline recorded from a partial fetch poisons every future delta, so
     // failures matter more on the first run than on any later one.
     out.push(...failureLines(delta))
@@ -88,9 +117,20 @@ export function renderDelta(delta: Delta, { maxCountries = 15 } = {}): string {
       avgChange === 0 ? dim(avgText) : avgChange > 0 ? green(avgText) : red(avgText)
     }   ${num(w.totalAfter)} ratings  (${signed(w.net)})`,
   )
+  for (const c of delta.featured) out.push(featuredLine(c, true))
+
   out.push('')
-  out.push(`  ${dim('Net change by star')}`)
+  out.push(`  ${dim('Net change by star, worldwide')}`)
   out.push(`    ${starLine(w.stars)}`)
+
+  // Per-star detail for featured storefronts, since "+9 ratings" is much less
+  // useful than knowing whether they were five stars or one.
+  for (const c of delta.featured) {
+    if (c.isEmpty || !hasStarMovement(c.stars)) continue
+    out.push('')
+    out.push(`  ${dim(`Net change by star, ${c.country.toUpperCase()}`)}`)
+    out.push(`    ${starLine(c.stars)}`)
+  }
 
   if (delta.changedCountries.length > 0) {
     out.push('')
