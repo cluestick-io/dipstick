@@ -168,6 +168,23 @@ test('multiple apps are separated by a rule', () => {
   assert.match(md, /### Fuel/)
 })
 
+test('mentions are appended so the comment actually notifies', () => {
+  // GitHub folds every comment into one issue thread; a daily comment on an
+  // already-read thread can pass unnoticed without a mention.
+  const md = buildIssueComment([delta()], ['loganisitt'])
+  assert.match(md, /cc @loganisitt/)
+  // Last, so it reads as delivery plumbing rather than part of the report.
+  assert.ok(md.indexOf('cc @loganisitt') > md.indexOf('Countries that moved'))
+})
+
+test('no mention block when none are configured', () => {
+  assert.doesNotMatch(buildIssueComment([delta()]), /cc @/)
+})
+
+test('multiple mentions are all included', () => {
+  assert.match(buildIssueComment([delta()], ['a', 'b']), /cc @a @b/)
+})
+
 test('the created issue body explains itself and names the apps', () => {
   const body = buildIssueBody(['Clock In', 'Fuel'])
   assert.match(body, /Clock In, Fuel/)

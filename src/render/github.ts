@@ -161,7 +161,7 @@ function failureNote(delta: Delta): string {
   )
 }
 
-export function buildIssueComment(deltas: Delta[]): string {
+export function buildIssueComment(deltas: Delta[], mention: string[] = []): string {
   const date = deltas[0]?.date ?? ''
   const sections = deltas.map(appSection).join('\n\n---\n\n')
 
@@ -169,7 +169,12 @@ export function buildIssueComment(deltas: Delta[]): string {
     ? '\n\n<sub>Net change since the previous snapshot — ratings can be removed or edited, so counts can fall.</sub>'
     : ''
 
-  return `## ${date}\n\n${sections}${footer}`
+  // Placed last so it reads as a delivery mechanism rather than as part of the
+  // report. GitHub folds every comment into one issue thread, so without a
+  // mention a daily comment on an already-read thread can pass unnoticed.
+  const cc = mention.length > 0 ? `\n\n<sub>cc ${mention.map((m) => `@${m}`).join(' ')}</sub>` : ''
+
+  return `## ${date}\n\n${sections}${footer}${cc}`
 }
 
 /** Body used when dipstick creates the tracking issue itself. */

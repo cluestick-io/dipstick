@@ -133,7 +133,7 @@ async function main(): Promise<number> {
       for (const delta of deltas) console.log(renderDelta(delta))
 
       const message = buildSlackMessage(deltas)
-      const comment = buildIssueComment(deltas)
+      const comment = buildIssueComment(deltas, config.github?.mention ?? [])
 
       if (dryRun) {
         if (config.slackWebhook) {

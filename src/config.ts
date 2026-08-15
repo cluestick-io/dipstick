@@ -52,6 +52,15 @@ export type GitHubConfig = {
   repo?: string
   /** An issue number, or 'auto' to find-or-create one. */
   issue: number | 'auto'
+  /**
+   * Usernames to @-mention on each comment.
+   *
+   * GitHub folds every comment on an issue into one notification thread, so a
+   * daily comment on a thread you have already read may not resurface. A
+   * mention creates its own notification (reason=mention) and is the most
+   * reliable way to actually be told.
+   */
+  mention: string[]
   /** Raw token spec, resolved at post time like the Slack webhook. */
   token: string
 }
@@ -209,7 +218,23 @@ function parseGitHub(raw: unknown, env: NodeJS.ProcessEnv): GitHubConfig | undef
     }
   }
 
-  return { repo, issue, token: cfg.token ? String(cfg.token) : 'env:GITHUB_TOKEN' }
+  const rawMention = cfg.mention
+  const mention = (
+    rawMention === undefined || rawMention === null
+      ? []
+      : Array.isArray(rawMention)
+        ? rawMention
+        : [rawMention]
+  ).map((m) => String(m).replace(/^@/, '').trim())
+
+  const badMention = mention.filter((m) => !/^[A-Za-z0-9][A-Za-z0-9-]*(\/[A-Za-z0-9-]+)?$/.test(m))
+  if (badMention.length > 0) {
+    throw new ConfigError(
+      `github.mention entries must be GitHub usernames or org/team, got: ${badMention.join(', ')}`,
+    )
+  }
+
+  return { repo, issue, mention, token: cfg.token ? String(cfg.token) : 'env:GITHUB_TOKEN' }
 }
 
 /**
