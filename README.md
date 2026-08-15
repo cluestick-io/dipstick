@@ -32,19 +32,39 @@ Apple's own per-country averages exactly, so it is a true figure rather than an 
 
 No credentials, for anything. That means you can track competitors as easily as your own apps.
 
+## What's different about it
+
+Paid ASO suites track your rating average and count over time. Four things here are
+harder to find, and the first is the one that motivated the tool:
+
+- **Per-star daily change.** Not "the average fell 0.01" but "+7 five-star, +2 one-star".
+  An average moving tells you something happened; the histogram tells you what.
+- **A true worldwide figure.** Apple publishes a rating average per storefront and no
+  global number anywhere. Summing every storefront's histogram reproduces Apple's own
+  per-country averages exactly, so the worldwide average is exact rather than estimated.
+- **All 115 storefronts**, not a curated subset — new markets appear on their own once
+  they pick up a first rating.
+- **No credentials at all**, so a competitor's app is exactly as easy to track as your
+  own, and there is no account to create or key to rotate.
+
+The data lives in your repo as one NDJSON line per day. Nothing to cancel, nothing to
+export, no vendor holding your history.
+
 ## Quick start
 
 ```bash
-npx @cluestick-io/dipstick init
+npx github:cluestick-io/dipstick init
 ```
 
 Edit `dipstick.yaml`, then:
 
 ```bash
-npx @cluestick-io/dipstick check
+npx github:cluestick-io/dipstick check
 ```
 
 `check` writes nothing and posts nothing, so it is safe to run as often as you like.
+
+Not on npm yet — install straight from the repo. Requires Node 22.18+.
 
 ## Configuration
 
