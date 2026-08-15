@@ -56,7 +56,40 @@ test('message has a header and a plain-text fallback for notifications', () => {
 
 test('featured standings are listed above worldwide', () => {
   const body = json([delta({ featured: [country('us', 9, { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 })] })])
-  assert.ok(body.indexOf('`US`') < body.indexOf('*Worldwide*'))
+  assert.ok(body.indexOf('*US*') < body.indexOf('*Worldwide*'))
+})
+
+test('a featured storefront is styled like Worldwide, not as a code chip', () => {
+  // Backticks render as an inline code chip in Slack, which made the country
+  // read as a tag rather than a peer of the bold Worldwide line beneath it.
+  const body = json([
+    delta({
+      featured: [country('us', 9, { 1: 2, 2: 0, 3: 0, 4: 0, 5: 7 })],
+      changedCountries: [country('gb', 1, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 })],
+    }),
+  ])
+  assert.match(body, /\*US\*/)
+  assert.doesNotMatch(body, /`US`/)
+  assert.doesNotMatch(body, /`GB`/)
+})
+
+test('no sentence is emitted twice', () => {
+  // A botched edit once shipped "Baseline recorded: 4.60 from 7,786 ratings
+  // Baseline recorded." to a real Slack channel. Cheap to guard against.
+  for (const d of [delta(), delta({ isFirstRun: true })]) {
+    const text = (buildSlackMessage([d]).blocks as any[])
+      .flatMap((b) => [b.text?.text, ...(b.elements ?? []).map((e: any) => e.text)])
+      .filter(Boolean)
+      .join('\n')
+
+    const sentences = text.split(/\n/).filter((line: string) => line.trim().length > 0)
+    assert.equal(
+      new Set(sentences).size,
+      sentences.length,
+      `duplicate line in Slack message:\n${text}`,
+    )
+    assert.doesNotMatch(text, /Baseline recorded.*Baseline recorded/)
+  }
 })
 
 test('the notification preview leads with the featured storefront', () => {

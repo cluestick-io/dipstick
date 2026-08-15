@@ -27,17 +27,24 @@ function starSummary(stars: StarDeltas): string {
   return ([5, 4, 3, 2, 1] as const).map((s) => `${s}★ ${signed(stars[s])}`).join('   ')
 }
 
-/** A featured storefront's standing line, shown whether or not it moved. */
+/**
+ * A featured storefront's standing line, shown whether or not it moved.
+ *
+ * Bold label, plain figures -- deliberately identical to the Worldwide line so
+ * the two read as peers in one list. Backticks here render as an inline code
+ * chip in Slack, which made the country look like a tag rather than a heading
+ * and clashed with the bold Worldwide beneath it.
+ */
 function featuredLine(c: CountryDelta, showChange: boolean): string {
-  const label = `\`${c.country.toUpperCase()}\``
+  const label = `*${c.country.toUpperCase()}*`
 
   if (c.isEmpty) return `${label} _no ratings in this storefront_`
-  if (!showChange) return `${label} *${c.avgAfter.toFixed(2)}* · ${num(c.totalAfter)} ratings`
+  if (!showChange) return `${label} ${c.avgAfter.toFixed(2)} · ${num(c.totalAfter)} ratings`
 
   const change = Number((c.avgAfter - c.avgBefore).toFixed(4))
   const text = `${change > 0 ? '+' : change < 0 ? '' : '±'}${change.toFixed(4)}`
 
-  return `${label} *${c.avgAfter.toFixed(2)}* ${trend(change)} ${text} · ${signed(c.net)} ratings`
+  return `${label} ${c.avgAfter.toFixed(2)} ${trend(change)} ${text} · ${signed(c.net)} ratings · ${num(c.totalAfter)} total`
 }
 
 function failureBlock(delta: Delta): unknown {
@@ -68,8 +75,6 @@ function appBlocks(delta: Delta): unknown[] {
           type: 'mrkdwn',
           text:
             `*${delta.appName}*\n` +
-            `Baseline recorded: *${w.avgAfter.toFixed(2)}* from ${num(w.totalAfter)} ratings ` +
-            `Baseline recorded.\n` +
             (delta.featured.length > 0
               ? delta.featured.map((c) => featuredLine(c, false)).join('\n') + '\n'
               : '') +
@@ -128,7 +133,9 @@ function appBlocks(delta: Delta): unknown[] {
         .filter((s) => c.stars[s] !== 0)
         .map((s) => `${s}★${signed(c.stars[s])}`)
         .join(' ')
-      return `\`${c.country.toUpperCase().padEnd(2)}\` ${signed(c.net).padStart(7)}  ${stars}`
+      // No padding: Slack renders this as proportional text, so padStart only
+      // ever produced ragged whitespace rather than aligned columns.
+      return `*${c.country.toUpperCase()}* ${signed(c.net)} · ${stars}`
     })
 
     if (delta.changedCountries.length > shown.length) {
