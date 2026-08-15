@@ -37,6 +37,18 @@ function starLine(stars: StarDeltas): string {
     .join('   ')
 }
 
+/** Rendered for both first runs and normal ones -- a partial run must never look complete. */
+function failureLines(delta: Delta): string[] {
+  if (delta.failures.length === 0) return []
+
+  const out = ['', yellow(`  ⚠ ${delta.failures.length} storefront(s) failed to fetch:`)]
+  for (const f of delta.failures.slice(0, 5)) out.push(dim(`    ${f.country}: ${f.reason}`))
+  if (delta.failures.length > 5) {
+    out.push(dim(`    …and ${delta.failures.length - 5} more`))
+  }
+  return out
+}
+
 export function renderDelta(delta: Delta, { maxCountries = 15 } = {}): string {
   const out: string[] = []
   const { worldwide: w } = delta
@@ -55,6 +67,9 @@ export function renderDelta(delta: Delta, { maxCountries = 15 } = {}): string {
       `  ${bold('Worldwide')}   ${bold(w.avgAfter.toFixed(5))}   ` +
         `${num(w.totalAfter)} ratings across ${delta.countryCount} storefronts`,
     )
+    // A baseline recorded from a partial fetch poisons every future delta, so
+    // failures matter more on the first run than on any later one.
+    out.push(...failureLines(delta))
     out.push('')
     return out.join('\n')
   }
@@ -97,17 +112,7 @@ export function renderDelta(delta: Delta, { maxCountries = 15 } = {}): string {
     out.push(dim('  No country changed today.'))
   }
 
-  if (delta.failures.length > 0) {
-    out.push('')
-    out.push(yellow(`  ⚠ ${delta.failures.length} storefront(s) failed to fetch:`))
-    for (const f of delta.failures.slice(0, 5)) {
-      out.push(dim(`    ${f.country}: ${f.reason}`))
-    }
-    if (delta.failures.length > 5) {
-      out.push(dim(`    …and ${delta.failures.length - 5} more`))
-    }
-  }
-
+  out.push(...failureLines(delta))
   out.push('')
   return out.join('\n')
 }

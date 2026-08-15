@@ -16,7 +16,17 @@ import {
   type Histogram,
 } from './parse.ts'
 
-export const DEFAULT_CONCURRENCY = 16
+/**
+ * Deliberately modest. Apple throttles bursts, and a throttled storefront does
+ * not fail loudly -- it returns a 200 whose page has no histogram, which is
+ * byte-for-byte the same shape as a storefront that genuinely has no ratings.
+ * A daily job has no reason to be fast, and being a good citizen here is what
+ * keeps the data trustworthy.
+ */
+export const DEFAULT_CONCURRENCY = 6
+
+/** Attempts to confirm a suspicious zero before believing it. */
+const ZERO_RECHECK_ATTEMPTS = 3
 
 export type Snapshot = {
   /** UTC date, YYYY-MM-DD. */
@@ -37,7 +47,23 @@ export function utcDate(now = new Date()): string {
 export async function takeSnapshot(
   app: { id: string; name: string },
   countries: string[],
-  { concurrency = DEFAULT_CONCURRENCY, date = utcDate() } = {},
+  {
+    concurrency = DEFAULT_CONCURRENCY,
+    date = utcDate(),
+    /**
+     * Storefronts that had ratings in the previous snapshot.
+     *
+     * Ratings are cumulative: a storefront holding hundreds of ratings does not
+     * drop to zero overnight. So a zero here is treated as a probable throttled
+     * response and re-checked rather than believed, which stops a transient
+     * blip from being written into history as a real collapse.
+     */
+    knownNonZero = new Set<string>(),
+  }: {
+    concurrency?: number
+    date?: string
+    knownNonZero?: Set<string>
+  } = {},
 ): Promise<Snapshot> {
   type Outcome =
     | { country: string; histogram: Histogram }
@@ -62,14 +88,50 @@ export async function takeSnapshot(
 
   const byCountry: Record<string, Histogram> = {}
   const failures: { country: string; reason: string }[] = []
+  const suspiciousZeros: string[] = []
 
   for (const outcome of outcomes) {
     if ('histogram' in outcome) {
-      // Storefronts where the app is unavailable return an all-zero histogram.
+      // Storefronts where the app has no ratings return an all-zero histogram.
       // Storing those would bloat history with meaningless rows.
-      if (totalRatings(outcome.histogram) > 0) byCountry[outcome.country] = outcome.histogram
+      if (totalRatings(outcome.histogram) > 0) {
+        byCountry[outcome.country] = outcome.histogram
+      } else if (knownNonZero.has(outcome.country)) {
+        suspiciousZeros.push(outcome.country)
+      }
     } else {
       failures.push(outcome)
+    }
+  }
+
+  // Re-check the suspicious zeros one at a time, slowly. If a storefront really
+  // is throttled, spacing the retries out is what lets it recover; if it truly
+  // has zero ratings now, it will keep saying so and we record a failure rather
+  // than a fabricated zero. Either way we never silently invent a collapse.
+  for (const country of suspiciousZeros) {
+    let recovered = false
+
+    for (let attempt = 0; attempt < ZERO_RECHECK_ATTEMPTS && !recovered; attempt++) {
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)))
+      try {
+        const histogram = parseHistogram(await fetchRatingPage(app.id, country))
+        if (totalRatings(histogram) > 0) {
+          byCountry[country] = histogram
+          recovered = true
+        }
+      } catch {
+        // Fall through to the next attempt.
+      }
+    }
+
+    if (!recovered) {
+      failures.push({
+        country,
+        reason:
+          `Previously had ratings but returned none, and still none after ` +
+          `${ZERO_RECHECK_ATTEMPTS} re-checks. Recorded as a failure rather than a zero ` +
+          `— if the app was pulled from this storefront, this will persist.`,
+      })
     }
   }
 

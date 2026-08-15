@@ -76,8 +76,12 @@ async function collect(
   const snapshots: Snapshot[] = []
 
   for (const app of config.apps) {
-    const snapshot = await takeSnapshot(app, config.countries, { date })
+    // Read history first: knowing which storefronts had ratings yesterday is
+    // what lets the snapshot tell a throttled response apart from a real zero.
     const baseline = previousRow(readHistory(config.historyDir, app.id), date)
+    const knownNonZero = new Set(Object.keys(baseline?.countries ?? {}))
+
+    const snapshot = await takeSnapshot(app, config.countries, { date, knownNonZero })
     snapshots.push(snapshot)
     deltas.push(diffSnapshot(snapshot, baseline))
   }

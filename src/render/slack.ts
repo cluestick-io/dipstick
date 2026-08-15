@@ -27,11 +27,28 @@ function starSummary(stars: StarDeltas): string {
   return ([5, 4, 3, 2, 1] as const).map((s) => `${s}★ ${signed(stars[s])}`).join('   ')
 }
 
+function failureBlock(delta: Delta): unknown {
+  return {
+    type: 'context',
+    elements: [
+      {
+        type: 'mrkdwn',
+        text:
+          `:warning: ${delta.failures.length} storefront(s) failed to fetch ` +
+          `(${delta.failures
+            .slice(0, 6)
+            .map((f) => f.country.toUpperCase())
+            .join(', ')}${delta.failures.length > 6 ? '…' : ''}) — totals are incomplete.`,
+      },
+    ],
+  }
+}
+
 function appBlocks(delta: Delta): unknown[] {
   const { worldwide: w } = delta
 
   if (delta.isFirstRun) {
-    return [
+    const blocks: unknown[] = [
       {
         type: 'section',
         text: {
@@ -44,6 +61,10 @@ function appBlocks(delta: Delta): unknown[] {
         },
       },
     ]
+    // A baseline taken from a partial fetch skews every delta that follows, so
+    // this is worth flagging loudly rather than hiding behind "first run".
+    if (delta.failures.length > 0) blocks.push(failureBlock(delta))
+    return blocks
   }
 
   // Round before choosing the arrow, so the symbol never contradicts the number
@@ -87,17 +108,7 @@ function appBlocks(delta: Delta): unknown[] {
     })
   }
 
-  if (delta.failures.length > 0) {
-    blocks.push({
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          text: `:warning: ${delta.failures.length} storefront(s) failed to fetch — totals may be incomplete.`,
-        },
-      ],
-    })
-  }
+  if (delta.failures.length > 0) blocks.push(failureBlock(delta))
 
   return blocks
 }
