@@ -123,11 +123,22 @@ clean one-line diff. About 4 KB per app per day (≈1.5 MB/year) with all 115 st
 
 ```bash
 npm test                     # unit tests, no network
+npm run typecheck            # tsc --noEmit
+npm run build                # emit dist/
 npm run verify:storefronts   # live check of all 115 storefronts
 ```
 
-Node 24+. One runtime dependency (`yaml`), which itself has none. No build step — Node
-runs the TypeScript directly.
+Node 22.18+. One runtime dependency (`yaml`), which itself has none.
+
+Locally, `node src/cli.ts` runs the TypeScript directly — no build needed. Distribution
+does need one: Node refuses to strip types for anything under `node_modules`, so an
+installed package must ship JavaScript. `tsc` runs on `prepare`, and
+`rewriteRelativeImportExtensions` turns the `.ts` imports into `.js` on the way out, which
+is what lets the same sources work both ways.
+
+`erasableSyntaxOnly` is on, so the compiler rejects anything Node's stripper could not have
+handled (enums, namespaces, parameter properties). That keeps `node src/cli.ts` and the
+built output from ever diverging.
 
 `verify:storefronts` exists because a wrong country→storefront mapping does not fail
 loudly: it returns real, well-formed data for the *wrong* country. The parser fixtures in

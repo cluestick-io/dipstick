@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    // Source imports use explicit .ts extensions so `node src/cli.ts` runs
+    // directly during development. These two rewrite them to .js on the way
+    // out, which is what makes the same files work both ways.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+
+    // Node's type stripping is erasure-only. This makes the compiler reject
+    // any syntax it could not have stripped (enums, namespaces, parameter
+    // properties), so `node src/cli.ts` can never drift from what tsc emits.
+    "erasableSyntaxOnly": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}
