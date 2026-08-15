@@ -1,5 +1,5 @@
 {
-  "name": "@cluestick-io/dipstick",
+  "name": "@cluestick/dipstick",
   "version": "0.1.0",
   "description": "Daily App Store rating deltas — worldwide, per-country, per-star — posted to a GitHub issue or Slack.",
   "type": "module",

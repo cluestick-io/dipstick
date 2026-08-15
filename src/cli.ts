@@ -23,6 +23,7 @@ import { postToSlack, SlackError } from './slack.ts'
 import { buildIssueComment } from './render/github.ts'
 import { postIssueComment, GitHubError } from './github.ts'
 import { writeScaffold } from './init.ts'
+import { VERSION } from './version.ts'
 
 const HELP = `
 dipstick — daily App Store rating deltas
@@ -41,7 +42,8 @@ OPTIONS
              Prints the exact Slack payload instead.
   --config   Path to config file (default: ${CONFIG_FILENAME})
   --date     Override the snapshot date, YYYY-MM-DD (default: today, UTC)
-  -h, --help Show this message
+  -h, --help    Show this message
+  -v, --version Print the version
 
 EXAMPLES
   dipstick init
@@ -52,14 +54,20 @@ EXAMPLES
 type Args = { command?: string; flags: Record<string, string | boolean> }
 
 function parseArgs(argv: string[]): Args {
-  const [command, ...rest] = argv
   const flags: Record<string, string | boolean> = {}
+  const positional: string[] = []
 
-  for (let i = 0; i < rest.length; i++) {
-    const arg = rest[i]
-    if (!arg.startsWith('-')) continue
+  // Flags are collected from anywhere, not just after the command, so
+  // `dipstick --help` behaves like `--help` rather than being read as a
+  // command named "--help" and rejected.
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (!arg.startsWith('-')) {
+      positional.push(arg)
+      continue
+    }
     const key = arg.replace(/^--?/, '')
-    const next = rest[i + 1]
+    const next = argv[i + 1]
     if (next && !next.startsWith('-')) {
       flags[key] = next
       i++
@@ -67,7 +75,7 @@ function parseArgs(argv: string[]): Args {
       flags[key] = true
     }
   }
-  return { command, flags }
+  return { command: positional[0], flags }
 }
 
 /** Snapshot every configured app and diff each against its own baseline. */
@@ -95,9 +103,16 @@ async function collect(
 async function main(): Promise<number> {
   const { command, flags } = parseArgs(process.argv.slice(2))
 
-  if (!command || flags.h || flags.help || command === 'help') {
+  if (flags.version || flags.v) {
+    console.log(VERSION)
+    return 0
+  }
+
+  // Asking for help is a success; being given nothing at all is not.
+  const askedForHelp = Boolean(flags.h || flags.help) || command === 'help'
+  if (askedForHelp || !command) {
     console.log(HELP)
-    return command ? 0 : 1
+    return askedForHelp ? 0 : 1
   }
 
   const configPath = typeof flags.config === 'string' ? flags.config : CONFIG_FILENAME

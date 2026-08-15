@@ -70,7 +70,7 @@ jobs:
           node-version: "24"
 
       # Installed straight from the public repo. Switch to the npm package
-      # (npx --yes @cluestick-io/dipstick run) once it is published.
+      # (npx --yes @cluestick/dipstick run) once it is published.
       - run: npx --yes github:cluestick-io/dipstick run
         env:
           # Provided automatically by Actions — nothing to configure.
