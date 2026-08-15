@@ -69,9 +69,10 @@ jobs:
         with:
           node-version: "24"
 
-      # Installed straight from the public repo. Switch to the npm package
-      # (npx --yes @cluestick/dipstick run) once it is published.
-      - run: npx --yes github:cluestick-io/dipstick run
+      # Unpinned, so fixes arrive without you doing anything. Pin to an exact
+      # version (@cluestick/dipstick@0.1.0) if you would rather a daily job
+      # never change underneath you.
+      - run: npx --yes @cluestick/dipstick run
         env:
           # Provided automatically by Actions — nothing to configure.
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}

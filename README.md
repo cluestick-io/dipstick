@@ -1,5 +1,8 @@
 # dipstick
 
+[![npm](https://img.shields.io/npm/v/@cluestick/dipstick)](https://www.npmjs.com/package/@cluestick/dipstick)
+[![license](https://img.shields.io/npm/l/@cluestick/dipstick)](./LICENSE)
+
 Daily App Store rating deltas — worldwide, per-country, per-star — posted to a GitHub
 issue or Slack.
 
@@ -53,18 +56,18 @@ export, no vendor holding your history.
 ## Quick start
 
 ```bash
-npx github:cluestick-io/dipstick init
+npx @cluestick/dipstick init
 ```
 
 Edit `dipstick.yaml`, then:
 
 ```bash
-npx github:cluestick-io/dipstick check
+npx @cluestick/dipstick check
 ```
 
 `check` writes nothing and posts nothing, so it is safe to run as often as you like.
 
-Not on npm yet — install straight from the repo. Requires Node 22.18+.
+Requires Node 22.18+. No credentials, no account, no API key.
 
 ## Configuration
 
