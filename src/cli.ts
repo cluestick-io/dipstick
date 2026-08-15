@@ -157,14 +157,17 @@ async function main(): Promise<number> {
       }
 
       if (config.github && githubTarget) {
-        const { issue, url } = await postIssueComment(
+        const { issue, url, updated } = await postIssueComment(
           githubTarget.repo,
           githubTarget.token,
           config.github.issue,
           config.apps.map((a) => a.name),
           comment,
+          date,
         )
-        console.log(`Posted to ${githubTarget.repo}#${issue} — ${url}`)
+        console.log(
+          `${updated ? 'Updated' : 'Posted'} ${githubTarget.repo}#${issue} — ${url}`,
+        )
       }
 
       if (!webhook && !config.github) {

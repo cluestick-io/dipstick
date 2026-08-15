@@ -161,6 +161,17 @@ function failureNote(delta: Delta): string {
   )
 }
 
+/**
+ * Hidden marker identifying which day a comment covers.
+ *
+ * An HTML comment renders as nothing on GitHub, and matching on it is far more
+ * robust than parsing the visible `## date` heading -- which is presentation
+ * and could reasonably change.
+ */
+export function dateMarker(date: string): string {
+  return `<!-- dipstick:date=${date} -->`
+}
+
 export function buildIssueComment(deltas: Delta[], mention: string[] = []): string {
   const date = deltas[0]?.date ?? ''
   const sections = deltas.map(appSection).join('\n\n---\n\n')
@@ -174,7 +185,9 @@ export function buildIssueComment(deltas: Delta[], mention: string[] = []): stri
   // mention a daily comment on an already-read thread can pass unnoticed.
   const cc = mention.length > 0 ? `\n\n<sub>cc ${mention.map((m) => `@${m}`).join(' ')}</sub>` : ''
 
-  return `## ${date}\n\n${sections}${footer}${cc}`
+  // Marker last: invisible on GitHub, and lets a same-day re-run find and
+  // update this comment instead of posting a duplicate.
+  return `## ${date}\n\n${sections}${footer}${cc}\n\n${dateMarker(date)}`
 }
 
 /** Body used when dipstick creates the tracking issue itself. */

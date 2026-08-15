@@ -7,7 +7,7 @@
  * notifications then deliver it to email and the mobile app.
  */
 
-import { buildIssueBody } from './render/github.ts'
+import { buildIssueBody, dateMarker } from './render/github.ts'
 
 /** Marks the issue dipstick owns, so it can find it again without title matching. */
 export const TRACKING_LABEL = 'dipstick'
@@ -101,19 +101,72 @@ async function resolveIssueNumber(
   return created.number
 }
 
+/**
+ * Find an existing comment covering `date`, if there is one.
+ *
+ * Bounded by `since`, so this stays cheap no matter how long the issue has been
+ * running -- a year-old thread does not mean paging through a year of comments.
+ */
+async function findCommentForDate(
+  token: string,
+  repo: string,
+  issue: number,
+  date: string,
+): Promise<number | undefined> {
+  const marker = dateMarker(date)
+  let page = 1
+
+  // A day's worth of comments will not exceed this; the cap is a runaway guard.
+  while (page <= 5) {
+    const { body } = await api(
+      token,
+      `/repos/${repo}/issues/${issue}/comments?since=${date}T00:00:00Z&per_page=100&page=${page}`,
+    )
+    if (!Array.isArray(body) || body.length === 0) return undefined
+
+    const match = body.find((c: any) => typeof c.body === 'string' && c.body.includes(marker))
+    if (match) return match.id
+    if (body.length < 100) return undefined
+    page++
+  }
+  return undefined
+}
+
+/**
+ * Post the day's report, or update the existing one for that date.
+ *
+ * Updating in place mirrors how history behaves -- a snapshot for a date it has
+ * already recorded rewrites that row rather than appending a second one -- so a
+ * re-run never leaves two conflicting accounts of the same day.
+ *
+ * It also gets the notification behaviour right: GitHub notifies on a new
+ * comment but not on an edit, so a new day pings and a same-day re-run
+ * corrects the record quietly.
+ */
 export async function postIssueComment(
   repo: string,
   token: string,
   wanted: number | 'auto',
   appNames: string[],
   comment: string,
-): Promise<{ issue: number; url: string }> {
+  date: string,
+): Promise<{ issue: number; url: string; updated: boolean }> {
   const issue = wanted === 'auto' ? await resolveIssueNumber(token, repo, appNames) : wanted
+
+  const existing = await findCommentForDate(token, repo, issue, date)
+
+  if (existing !== undefined) {
+    const { body } = await api(token, `/repos/${repo}/issues/comments/${existing}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body: comment }),
+    })
+    return { issue, url: body.html_url, updated: true }
+  }
 
   const { body } = await api(token, `/repos/${repo}/issues/${issue}/comments`, {
     method: 'POST',
     body: JSON.stringify({ body: comment }),
   })
 
-  return { issue, url: body.html_url }
+  return { issue, url: body.html_url, updated: false }
 }
